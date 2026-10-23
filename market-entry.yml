@@ -1,5 +1,5 @@
-url: https://github.com/<OWNER>/dsh-plugin-doc-review
-name: <OWNER>/dsh-plugin-doc-review
+url: https://github.com/Suren-ViLL/dsh-plugin-doc-review
+name: Suren-ViLL/dsh-plugin-doc-review
 category: docs
 description:
   en: 'Review AI-generated Word, PowerPoint, PDF and HTML in the official preview: box problems, edit the text in place, and hand the notes to the agent.'

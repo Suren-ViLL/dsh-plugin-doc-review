@@ -14,11 +14,11 @@
 
 先在 GitHub 网页上新建空仓库 `dsh-plugin-doc-review`（**不要**勾选 Initialize with README / .gitignore / license，本地已经有了）。
 
-然后把 `<OWNER>` 换成你的 GitHub 用户名：
+然后把 `Suren-ViLL` 换成你的 GitHub 用户名：
 
 ```bash
 cd "C:\Users\szp01\Desktop\WORK STATION\DSH\dsh-doc-review"
-git remote add origin https://github.com/<OWNER>/dsh-plugin-doc-review.git
+git remote add origin https://github.com/Suren-ViLL/dsh-plugin-doc-review.git
 git branch -M main
 git push -u origin main
 ```
@@ -54,17 +54,17 @@ dsh plugin add dsh-plugin-doc-review
 市场不是自己提交的 —— 它读的是 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 这份精选列表。**提一个只加一个文件的 PR** 就行：
 
 ```bash
-git clone https://github.com/<你的用户名>/awesome-dsh-plugin.git
+git clone https://github.com/Suren-ViLL/awesome-dsh-plugin.git
 cd awesome-dsh-plugin
 git checkout -b add-doc-review
 mkdir -p data/plugins
 ```
 
-新建 `data/plugins/<OWNER>__dsh-plugin-doc-review.yml`，内容用本目录的 `market-entry.yml`，把其中的 `<OWNER>` 换成你的用户名：
+新建 `data/plugins/Suren-ViLL__dsh-plugin-doc-review.yml`，内容用本目录的 `market-entry.yml`，把其中的 `Suren-ViLL` 换成你的用户名：
 
 ```yaml
-url: https://github.com/<OWNER>/dsh-plugin-doc-review
-name: <OWNER>/dsh-plugin-doc-review
+url: https://github.com/Suren-ViLL/dsh-plugin-doc-review
+name: Suren-ViLL/dsh-plugin-doc-review
 category: docs
 description:
   en: 'Review AI-generated Word, PowerPoint, PDF and HTML in the official preview: box problems, edit the text in place, and hand the notes to the agent.'
@@ -72,7 +72,7 @@ description:
 ```
 
 ```bash
-git add data/plugins/<OWNER>__dsh-plugin-doc-review.yml
+git add data/plugins/Suren-ViLL__dsh-plugin-doc-review.yml
 git commit -m "Add dsh-plugin-doc-review"
 git push origin add-doc-review
 ```
