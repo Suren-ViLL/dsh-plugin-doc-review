@@ -24,7 +24,6 @@ window.__ModuleLoader__.load({
       apply: 'api/dsh-doc-review?action=apply',
       locate: 'api/dsh-doc-review?action=locate',
       selfcheck: 'api/dsh-doc-review?action=selfcheck',
-      bench: 'api/dsh-doc-review?action=bench',
       editText: 'api/dsh-doc-review?action=edit-text',
       textSave: 'api/dsh-doc-review?action=text-save',
     };
@@ -59,7 +58,13 @@ window.__ModuleLoader__.load({
       '@supports not (align-items: safe center){.dr-scroll.pages{align-items:flex-start}}',
       '.dr-page img{display:block;width:100%;height:auto;-webkit-user-drag:none}',
       '.dr-page iframe{display:block;width:100%;height:70vh;border:0;background:#fff}',
-      '.dr-page .dr-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px;background:#f8fafc}',
+      '.dr-page .dr-ph{display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px;background:#f8fafc}',
+      /* A page whose picture has not arrived keeps the page's shape: the frame
+         is the placeholder itself, so the scrollbar stays honest and the panel
+         is never blank. An absolutely positioned placeholder would collapse
+         the frame to nothing. */
+      '.dr-page > .dr-ph{position:relative;width:100%;height:auto;box-sizing:border-box}',
+      '.dr-page > .dr-ph.dr-phFailed{color:var(--dsw-alias-state-error-primary);background:rgba(220,38,38,.05)}',
       /* The text layer: transparent runs over the page picture, so the
          human clicks the text they see. */
       '.dr-textlayer{position:absolute;inset:0;pointer-events:none;z-index:6}',
@@ -881,8 +886,9 @@ window.__ModuleLoader__.load({
       const [view, setView] = useState('page');
       // The pages near the viewport, as a set the blobs are fetched for. A
       // counter is bumped whenever the set grows, so the fetch runs again.
-      const pageWanted = useRef({});
-      const [wantedVersion, setWantedVersion] = useState(0);
+      // A page whose picture did not arrive, and why — shown in its frame,
+      // so a page that cannot be drawn says so instead of staying empty.
+      const [failed, setFailed] = useState({});
       // A Word document is edited as plain text in one face; a slide deck
       // keeps its own structure, so its paragraphs are shown as they are.
       const textStyle = doc !== null && (doc.ext === 'pptx' || doc.ext === 'ppt') ? 'slides' : 'plain';
@@ -953,58 +959,9 @@ window.__ModuleLoader__.load({
           for (const url of Object.values(held)) URL.revokeObjectURL(url);
           blobUrls.current = {};
           setBlobs({});
-          pageWanted.current = {};
+          setFailed({});
         };
       }, [file]);
-
-      /**
-       * Note which pages are near the viewport.
-       *
-       * A page's picture is drawn on the Host the first time it is asked for,
-       * so asking for every page at once both wastes the work and, because
-       * the renderer serves one request at a time, makes them all slow. The
-       * first pages are asked for straight away so the panel is never empty;
-       * the observer adds the ones the human scrolls towards.
-       */
-      useEffect(() => {
-        if (doc === null) return undefined;
-        // Whatever the document is — pages, a report, an image — the first
-        // thing it shows is asked for at once, so the panel is never empty.
-        let grew = false;
-        for (const page of doc.pages.slice(0, 2)) {
-          if (pageWanted.current[page.index] !== true) {
-            pageWanted.current[page.index] = true;
-            grew = true;
-          }
-        }
-        if (grew) setWantedVersion((value) => value + 1);
-        // Only a paged document scrolls through more pages to watch for.
-        if (doc.kind !== 'pages') return undefined;
-
-        if (typeof IntersectionObserver !== 'function') {
-          // Without an observer every page is asked for, which is what the
-          // panel did before; a slow panel beats a blank one.
-          for (const page of doc.pages) pageWanted.current[page.index] = true;
-          setWantedVersion((value) => value + 1);
-          return undefined;
-        }
-        const observer = new IntersectionObserver((entries) => {
-          let reached = false;
-          for (const entry of entries) {
-            if (!entry.isIntersecting) continue;
-            const index = Number(entry.target.getAttribute('data-dr-page'));
-            if (Number.isFinite(index) && pageWanted.current[index] !== true) {
-              pageWanted.current[index] = true;
-              reached = true;
-            }
-          }
-          if (reached) setWantedVersion((value) => value + 1);
-        }, { rootMargin: '1200px 0px' });
-        for (const node of Object.values(pageRefs.current)) {
-          if (node !== null && node !== undefined) observer.observe(node);
-        }
-        return () => observer.disconnect();
-      }, [doc]);
 
       /**
        * The page images.
@@ -1016,48 +973,42 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         if (doc === null) return undefined;
         let cancelled = false;
-        const urls = [];
-        // Only the pages near the viewport are asked for. Each one costs a
-        // render on the Host, so asking for all of them at once made a burst
-        // of work for pictures nobody had scrolled to — and the Host, running
-        // one renderer per request, could not keep up with it.
-        const wanted = [];
-        for (const [index] of Object.entries(pageWanted.current)) {
-          const page = doc.pages.find((candidate) => candidate.index === Number(index));
-          if (page !== undefined) wanted.push(page);
-        }
-        wanted.sort((a, b) => a.index - b.index);
-        const queue = wanted;
+        const made = [];
+        // The pages are asked for in order, one after another. Drawing them
+        // all at once made the Host run a renderer per request and fall over;
+        // doing them in turn keeps the first page quick and the Host calm.
         const run = async () => {
-          while (queue.length > 0) {
+          for (const page of doc.pages) {
             if (cancelled) return;
-            const page = queue.shift();
+            if (blobUrls.current[page.index] !== undefined) continue;
             try {
               if (typeof page.url !== 'string' || page.url === '') {
                 void report(`kind=page-url-missing&index=${String(page.index)}`);
+                setFailed((previous) => ({ ...previous, [page.index]: '没有地址' }));
                 continue;
               }
               const response = await fetch(page.url, { cache: 'no-store' });
               if (!response.ok) {
-                void report(`kind=page-missing&status=${String(response.status)}&url=${encodeURIComponent(String(page.url))}`);
+                void report(`kind=page-missing&status=${String(response.status)}&index=${String(page.index)}`);
+                setFailed((previous) => ({ ...previous, [page.index]: `HTTP ${String(response.status)}` }));
                 continue;
               }
               const url = URL.createObjectURL(await response.blob());
               if (cancelled) { URL.revokeObjectURL(url); return; }
-              urls.push(url);
+              made.push(url);
               blobUrls.current[page.index] = url;
               setBlobs((previous) => ({ ...previous, [page.index]: url }));
-            } catch { /* leave this page blank */ }
+            } catch (error) {
+              setFailed((previous) => ({
+                ...previous,
+                [page.index]: error instanceof Error ? error.message : String(error),
+              }));
+            }
           }
         };
-        void Promise.all([run(), run()]);
-        return () => {
-          cancelled = true;
-          // The blobs outlive this run: the effect runs again whenever more
-          // pages are wanted, and releasing the earlier ones would blank the
-          // pages that were already showing.
-        };
-      }, [doc, wantedVersion]);
+        void run();
+        return () => { cancelled = true; };
+      }, [doc]);
 
       /**
        * Watch the file.
@@ -1092,8 +1043,6 @@ window.__ModuleLoader__.load({
         let cancelled = false;
         (async () => {
           try {
-            const bench = await call(`${API.bench}&path=${encodeURIComponent(file)}&sessionId=${encodeURIComponent(sessionId)}`);
-            void report(`kind=bench&result=${encodeURIComponent(JSON.stringify(bench))}`);
             const check = await call(`${API.selfcheck}&path=${encodeURIComponent(file)}&sessionId=${encodeURIComponent(sessionId)}`);
             const results = check.results ?? {};
             void report(`kind=selfcheck&result=${encodeURIComponent(JSON.stringify(results))}`);
@@ -1710,16 +1659,19 @@ window.__ModuleLoader__.load({
             ref: (node) => { pageRefs.current[page.index] = node; },
           },
             blobs[page.index] === undefined
-              // The page is drawn when it comes near the viewport; until then
-              // the frame keeps its shape so the scrollbar stays honest.
+              // The picture is on its way. The frame keeps the page's shape so
+              // the scrollbar does not jump, and says which page is coming.
               ? h('div', {
-                  className: 'dr-ph',
+                  className: failed[page.index] === undefined ? 'dr-ph' : 'dr-ph dr-phFailed',
                   style: {
                     aspectRatio: page.width > 0 && page.height > 0
                       ? `${String(page.width)} / ${String(page.height)}`
                       : '1 / 1.414',
                   },
-                })
+                },
+                  h('span', null, failed[page.index] === undefined
+                    ? `第 ${String(page.index)} 页绘制中…`
+                    : `第 ${String(page.index)} 页无法绘制：${failed[page.index]}`))
               : h('img', {
                   src: blobs[page.index],
                   alt: '',

@@ -1366,22 +1366,6 @@ export function apply(ctx, config = {}) {
     }
   });
 
-  register('/api/dsh-doc-review?action=bench', 'GET', async (request) => {
-    const url = new URL(request.url, 'http://x');
-    const target = url.searchParams.get('path') ?? '';
-    const marks = [];
-    const mark = (name) => marks.push(`${name}=${String(Date.now() - start)}ms`);
-    const start = Date.now();
-    try {
-      const converted = await pdfBytes(ctx, resolve(target));
-      mark('convert');
-      mark('pdfBytes');
-      return json({ ok: true, marks, bytes: converted.pdf.byteLength, missing: converted.missingFonts });
-    } catch (error) {
-      return json({ ok: false, error: error instanceof Error ? error.message : String(error), marks });
-    }
-  });
-
   register('/api/dsh-doc-review?action=selfcheck', 'GET', async (request) => {
       const url = new URL(request.url, 'http://x');
       const results = { routes: [...apiRoutes.keys()] };
@@ -1415,7 +1399,10 @@ export function apply(ctx, config = {}) {
         if (typeof home === 'string' && home !== '') {
           const dir = join(home, 'doc-review');
           await mkdir(dir, { recursive: true });
-          await writeFile(join(dir, 'client-report.log'), line, { flag: 'a' });
+          // A probe names its own file, so its noise never buries a real
+          // failure in the panel's report.
+          const name = process.env.DSH_DOC_REVIEW_REPORT ?? 'client-report.log';
+          await writeFile(join(dir, name), line, { flag: 'a' });
         }
       } catch { /* reporting must never break the panel */ }
       return json({ ok: true });

@@ -22,6 +22,10 @@ const document = process.argv[3];
 const routes = new Map();
 const apiRoutes = new Map();
 
+// The probe's reports go to their own file: the panel's own report must show
+// only what the panel did.
+process.env.DSH_DOC_REVIEW_REPORT = 'probe-report.log';
+
 const ctx = {
   get(name) {
     if (name === 'webServer') {
@@ -53,7 +57,38 @@ const ctx = {
    * renderer itself, which is the path that must keep working on a host
    * without the conversion service.
    */
-  inject() {},
+  /**
+   * The probe stands in for the Harness.
+   *
+   * An Office provider is handed over so the path a host with the shipped
+   * conversion service takes is the path the probe exercises; that is the
+   * arrangement the panel actually runs in.
+   */
+  inject(deps, fn) {
+    if (!deps.includes('officeToPdf')) return;
+    fn({
+      officeToPdf: {
+        async convert(request) {
+          const { execFileSync } = await import('node:child_process');
+          const fs = await import('node:fs/promises');
+          const os = await import('node:os');
+          const path = await import('node:path');
+          const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'probe-pdf-'));
+          const out = path.join(dir, 'document.pdf');
+          execFileSync(process.env.DSH_DOC_REVIEW_NODE ?? process.execPath, [
+            process.env.DSH_DOC_REVIEW_CLI, 'convert',
+            '--input', String(request.source.key), '--output', out,
+          ], { stdio: 'ignore' });
+          return {
+            pdf: await fs.readFile(out),
+            missingFonts: ['Courier'],
+            cacheKey: 'probe',
+            generation: 'probe',
+          };
+        },
+      },
+    });
+  },
   logger: { warn: (message) => console.error('[warn]', message) },
   effect: (fn) => { const disposer = fn(); return () => { if (typeof disposer === 'function') disposer(); }; },
   agents: {},
