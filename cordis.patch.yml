@@ -1,0 +1,6 @@
+- insert:
+    - id: doc-review
+      name: dsh-plugin-doc-review
+      config:
+        maxPagePixels: 2400000
+        dpi: 96

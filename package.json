@@ -1,0 +1,60 @@
+{
+  "name": "dsh-plugin-doc-review",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Review AI-generated Word, PowerPoint, PDF and HTML in the official preview: box problems, edit the text in place, and hand the notes to the agent.",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "docx",
+    "pptx",
+    "pdf",
+    "document-review",
+    "annotation"
+  ],
+  "license": "MIT",
+  "author": "石梓鹏",
+  "icon": "./icon.svg",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale/*.json",
+    "tools/doc_textblocks.py",
+    "tools/doc_apply_text.py",
+    "tools/doc_html.py",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-sidebar-documentpreview"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.64.1"
+  },
+  "meta": {
+    "title": "文档审阅台",
+    "description": "在官方预览里审阅文档：框选批注、就地改字、逐段编辑、缩放预览。"
+  }
+}

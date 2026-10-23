@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+<head><base href="./"></head>
+<body>
+<div id="out"></div>
+<script>
+/**
+ * The browser half of the route check.
+ *
+ * It asks for a document exactly the way the panel does, then fetches the
+ * first page exactly the way the panel does, and reports what the browser
+ * actually received. The panel's images are served from the trusted /api
+ * channel, so this mirrors that path.
+ */
+window.__results = { steps: [] };
+const API = {
+  info: 'api/dsh-doc-review/render',
+  page: 'api/dsh-doc-review/page',
+};
+(async () => {
+  const log = (name, value) => window.__results.steps.push([name, value]);
+  try {
+    const target = __TARGET__;
+    const infoResponse = await fetch(API.info + '?path=' + encodeURIComponent(target), { cache: 'no-store' });
+    log('info.status', infoResponse.status);
+    const payload = await infoResponse.json();
+    log('info.ok', payload.ok);
+    log('info.error', payload.error ? payload.error.message : null);
+    log('info.kind', payload.kind);
+    log('info.pageCount', payload.pageCount);
+    log('info.pages', (payload.pages || []).length);
+    log('info.firstPageUrl', (payload.pages || [])[0] ? payload.pages[0].url : null);
+
+    const token = payload.token;
+    const index = (payload.pages || [])[0].index;
+    const url = API.page + '?token=' + encodeURIComponent(token) + '&index=' + String(index);
+    log('fetch.url', url);
+    const response = await fetch(url, { cache: 'no-store' });
+    log('page.status', response.status);
+    log('page.ok', response.ok);
+    if (!response.ok) { window.__results.done = true; return; }
+    const blob = await response.blob();
+    log('page.bytes', blob.size);
+    log('page.type', blob.type);
+    const objectUrl = URL.createObjectURL(blob);
+    const img = document.createElement('img');
+    img.src = objectUrl;
+    img.style.cssText = 'width:420px;display:block;border:1px solid #333';
+    document.getElementById('out').appendChild(img);
+    await new Promise((r) => { img.onload = r; img.onerror = r; });
+    log('img.naturalWidth', img.naturalWidth);
+    log('img.naturalHeight', img.naturalHeight);
+  } catch (error) {
+    log('fatal', String(error));
+  }
+  window.__results.done = true;
+})();
+</script>
+</body>
+</html>
